@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { Button, Modal, TextInput, Label, Spinner, Table, Badge, Card } from 'flowbite-react';
 
 interface Pit {
   id: number;
@@ -12,9 +13,14 @@ interface Pit {
 interface Activity {
   id: number;
   pit_id: number;
-  type: string;  // "Aula", "Pesquisa", "Extensão", etc.
+  type: string;
   title: string;
-  description: string;
+  details: string;
+}
+
+interface ActivityType {
+  id: number;
+  name: string;
 }
 
 export default function DashboardPage() {
@@ -24,6 +30,14 @@ export default function DashboardPage() {
   const [pits, setPits] = useState<Pit[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [selectedPit, setSelectedPit] = useState<number | null>(null);
+  const [activityTypes, setActivityTypes] = useState<ActivityType[]>([]);
+  const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+  const [isPitModalOpen, setIsPitModalOpen] = useState(false);
+  const [selectedType, setSelectedType] = useState<number | null>(null);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [pitSemester, setPitSemester] = useState('');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     async function fetchPits() {
@@ -34,122 +48,181 @@ export default function DashboardPage() {
     fetchPits();
   }, [userId]);
 
+  useEffect(() => {
+    async function fetchActivityTypes() {
+      const response = await fetch('/api/activityTypes');
+      const data: ActivityType[] = await response.json();
+      setActivityTypes(data);
+    }
+    fetchActivityTypes();
+  }, []);
+
   const handlePitClick = async (pitId: number) => {
-    const response = await fetch(`/api/activities`);
+    setLoading(true);
+    const response = await fetch(`/api/activities?pit_id=${pitId}`);
     const data: Activity[] = await response.json();
-    setActivities(data.filter((activity) => activity.pit_id === pitId));
+    setActivities(data);
     setSelectedPit(pitId);
+    setLoading(false);
   };
 
-  const activityTypes = ['Aula', 'Pesquisa', 'Extensão', 'Apoio ao Ensino', 'Atividades Administrativas'];
+  const handleCreateActivity = async () => {
+    if (!selectedPit || !selectedType || !title || !description) return;
 
-  // Função para contar o número de atividades de cada tipo
-  const getActivityCountByType = (type: string) => {
-    return activities.filter((activity) => activity.type === type).length;
+    const newActivity = {
+      pit_id: selectedPit,
+      type_id: selectedType,
+      title,
+      details: description,
+    };
+
+    const response = await fetch('/api/activities', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(newActivity),
+    });
+
+    if (response.ok) {
+      const data: Activity = await response.json();
+      setActivities([...activities, data]);
+      setIsActivityModalOpen(false);
+    } else {
+      alert('Erro ao criar atividade.');
+    }
+  };
+
+  const handleCreatePit = async () => {
+    if (!pitSemester) return;
+
+    const newPit = {
+      user_id: userId,
+      semester: pitSemester,
+    };
+
+    const response = await fetch('/api/pits', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(newPit),
+    });
+
+    if (response.ok) {
+      const data: Pit = await response.json();
+      setPits([...pits, data]);
+      setIsPitModalOpen(false);
+    } else {
+      alert('Erro ao criar PIT.');
+    }
   };
 
   return (
-    <div className="flex min-h-screen bg-base-200">
-      {/* Main Content */}
-      <div className="flex-grow p-6">
-        {/* Resumo do PIT */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-          <div className="card bg-base-100 shadow-lg">
-            <div className="card-body">
-              <h3 className="card-title">Resumo do PIT</h3>
-              <p>Semestre: {pits.length > 0 ? pits[0].semester : 'N/A'}</p>
-              <p>Total de Atividades: {activities.length}</p>
-            </div>
-          </div>
+    <div className="min-h-screen bg-gray-100 p-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+        <Card>
+          <h3 className="text-xl font-semibold">Resumo do PIT</h3>
+          <p>Semestre: {pits.length > 0 ? pits[0].semester : 'N/A'}</p>
+          <p>Total de Atividades: {activities.length}</p>
+        </Card>
 
-          {/* Indicadores de Tipo de Atividade */}
-          <div className="card bg-base-100 shadow-lg">
-            <div className="card-body">
-              <h3 className="card-title">Tipos de Atividades</h3>
-              {activityTypes.map((type) => (
-                <div key={type} className="flex justify-between items-center mb-2">
-                  <span>{type}</span>
-                  <div className="badge badge-primary">{getActivityCountByType(type)}</div>
-                </div>
-              ))}
+        <Card>
+          <h3 className="text-xl font-semibold">Tipos de Atividades</h3>
+          {activityTypes.map((type) => (
+            <div key={type.id} className="flex justify-between items-center">
+              <span>{type.name}</span>
+              <Badge color="info">
+                {activities.filter((activity) => activity.type === type.name).length}
+              </Badge>
             </div>
-          </div>
+          ))}
+        </Card>
 
-          {/* Status de Conclusão */}
-          <div className="card bg-base-100 shadow-lg">
-            <div className="card-body">
-              <h3 className="card-title">Status de Conclusão</h3>
-              <div className="progress">
-                <div
-                  className="progress-bar"
-                  style={{ width: `${(activities.length / pits.length) * 100}%` }}
-                ></div>
-              </div>
-              <p>{activities.length} de {pits.length} atividades concluídas</p>
+        <Card>
+          <h3 className="text-xl font-semibold">PITs</h3>
+          {pits.map((pit) => (
+            <div
+              key={pit.id}
+              className="flex justify-between items-center cursor-pointer"
+              onClick={() => handlePitClick(pit.id)}
+            >
+              <span>PIT {pit.semester}</span>
+              <Badge color="success">
+                {activities.filter((activity) => activity.pit_id === pit.id).length}
+              </Badge>
             </div>
-          </div>
-        </div>
-
-        {/* Ações e Gestão de Atividades */}
-        <div className="mb-6">
-          <h2 className="text-2xl font-semibold mb-4">Seus PITs</h2>
-          {pits.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {pits.map((pit) => (
-                <div
-                  key={pit.id}
-                  className="card bg-base-100 shadow-lg cursor-pointer"
-                  onClick={() => handlePitClick(pit.id)}
-                >
-                  <div className="card-body">
-                    <h3 className="card-title">PIT {pit.semester}</h3>
-                    <p>ID: {pit.id}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center">
-              <p className="text-gray-500">Nenhum PIT cadastrado.</p>
-              <button className="btn btn-primary mt-4">Adicionar Novo PIT</button>
-            </div>
-          )}
-        </div>
-
-        {/* Activities Section */}
-        {selectedPit && (
-          <div>
-            <h2 className="text-2xl font-semibold mb-4">Atividades do PIT {selectedPit}</h2>
-            {activities.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="table w-full">
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Título</th>
-                      <th>Descrição</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {activities.map((activity) => (
-                      <tr key={activity.id}>
-                        <td>{activity.id}</td>
-                        <td>{activity.title}</td>
-                        <td>{activity.description}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="text-center">
-                <p className="text-gray-500">Nenhuma atividade cadastrada para este PIT.</p>
-                <button className="btn btn-secondary mt-4">Adicionar Atividade</button>
-              </div>
-            )}
-          </div>
-        )}
+          ))}
+        </Card>
       </div>
+
+      <div className="flex gap-4 mb-6">
+        <Button onClick={() => setIsActivityModalOpen(true)}>Adicionar Nova Atividade</Button>
+        <Button color="success" onClick={() => setIsPitModalOpen(true)}>Adicionar Novo PIT</Button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center">
+          <Spinner size="lg" aria-label="Loading..." />
+        </div>
+      ) : (
+        selectedPit && (
+          <Table>
+            <Table.Head>
+              <Table.HeadCell>ID</Table.HeadCell>
+              <Table.HeadCell>Título</Table.HeadCell>
+              <Table.HeadCell>Descrição</Table.HeadCell>
+            </Table.Head>
+            <Table.Body>
+              {activities.map((activity) => (
+                <Table.Row key={activity.id}>
+                  <Table.Cell>{activity.id}</Table.Cell>
+                  <Table.Cell>{activity.title}</Table.Cell>
+                  <Table.Cell>{activity.details}</Table.Cell>
+                </Table.Row>
+              ))}
+            </Table.Body>
+          </Table>
+        )
+      )}
+
+      <Modal show={isActivityModalOpen} onClose={() => setIsActivityModalOpen(false)}>
+        <Modal.Header>Criar Nova Atividade</Modal.Header>
+        <Modal.Body>
+          <Label htmlFor="activity-type" value="Tipo de Atividade" />
+          <select
+            id="activity-type"
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring focus:ring-opacity-50"
+            value={selectedType || ''}
+            onChange={(e) => setSelectedType(parseInt(e.target.value, 10))}
+          >
+            <option value="">Selecione um tipo</option>
+            {activityTypes.map((type) => (
+              <option key={type.id} value={type.id}>{type.name}</option>
+            ))}
+          </select>
+
+          <Label htmlFor="title" value="Título" className="mt-4" />
+          <TextInput id="title" value={title} onChange={(e) => setTitle(e.target.value)} />
+
+          <Label htmlFor="description" value="Descrição" className="mt-4" />
+          <TextInput id="description" value={description} onChange={(e) => setDescription(e.target.value)} />
+        </Modal.Body>
+        <Modal.Footer>
+          <Button onClick={handleCreateActivity}>Criar</Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal show={isPitModalOpen} onClose={() => setIsPitModalOpen(false)}>
+        <Modal.Header>Criar Novo PIT</Modal.Header>
+        <Modal.Body>
+          <Label htmlFor="semester" value="Semestre" />
+          <TextInput id="semester" value={pitSemester} onChange={(e) => setPitSemester(e.target.value)} />
+        </Modal.Body>
+        <Modal.Footer>
+          <Button color="success" onClick={handleCreatePit}>Criar</Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 }

@@ -22,11 +22,11 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     const body = await req.json();
-    const { pit_id, type_id, title, description } = body;
+    const { pit_id, type_id, title, details } = body;
 
     const result = await pool.query(
-      `INSERT INTO activities (pit_id, type_id, title, description) VALUES ($1, $2, $3, $4) RETURNING *`,
-      [pit_id, type_id, title, description]
+      `INSERT INTO activities (pit_id, type_id, title, details) VALUES ($1, $2, $3, $4) RETURNING *`,
+      [pit_id, type_id, title, details]
     );
     return new Response(JSON.stringify(result.rows[0]), { status: 201 });
   } catch (error) {

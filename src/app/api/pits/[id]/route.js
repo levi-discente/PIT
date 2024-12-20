@@ -19,12 +19,12 @@ export async function GET(req, { params }) {
 export async function PUT(req, { params }) {
   const { id } = params;
   const body = await req.json();
-  const { user_id, semester } = body;
+  const { userId, semester } = body;
 
   try {
     const result = await pool.query(
       `UPDATE pits SET user_id = $1, semester = $2, updated_at = NOW() WHERE id = $3 RETURNING *`,
-      [user_id, semester, id]
+      [userId, semester, id]
     );
     if (result.rows.length === 0) {
       return new Response(JSON.stringify({ error: 'PIT not found' }), { status: 404 });
