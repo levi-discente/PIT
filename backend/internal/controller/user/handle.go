@@ -6,41 +6,26 @@ import (
 	"net/http"
 
 	"github.com/levi-discente/PIT/internal/database"
-	"github.com/levi-discente/PIT/internal/helpers"
 
 	"github.com/gin-gonic/gin"
 )
 
 func GetUsers(c *gin.Context) {
-	client := database.FirebaseDB
-	ref := client.NewRef("user")
-	var rawData interface{}
+	client, err := database.SupaBaseInit()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("cannot initialize client: %v", err)})
+		return
+	}
 
-	if err := ref.Get(c, &rawData); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	response, _, err := client.From("user").Select("*", "exact", false).Execute()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to fetch users: %v", err)})
 		return
 	}
 
 	var users []User
-	switch rawData := rawData.(type) {
-	case map[string]interface{}:
-		for _, v := range rawData {
-			var user User
-			if err := helpers.MapToStruct(v, &user); err == nil {
-				users = append(users, user)
-			}
-		}
-	case []interface{}:
-		for _, v := range rawData {
-			if v != nil {
-				var user User
-				if err := helpers.MapToStruct(v, &user); err == nil {
-					users = append(users, user)
-				}
-			}
-		}
-	default:
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Unexpected data format"})
+	if err := json.Unmarshal(response, &users); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to parse response: %v", err)})
 		return
 	}
 
@@ -85,31 +70,67 @@ func CreateUser(c *gin.Context) {
 }
 
 func UpdateUser(c *gin.Context) {
-	client := database.FirebaseDB
-	ref := client.NewRef("user")
+	// Inicializa o cliente Supabase
+	client, err := database.SupaBaseInit()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("cannot initialize client: %v", err)})
+		return
+	}
+
 	id := c.Param("id")
-	var user User
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "User ID is required"})
+		return
+	}
+
+	var user UserUpdate
 	if err := c.BindJSON(&user); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("failed to parse request body: %v", err)})
 		return
 	}
-	if err := ref.Child(id).Update(c, map[string]interface{}{
-		"name":  user.Name,
-		"email": user.Email,
-		"role":  user.Role,
-	}); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+
+	response, _, err := client.From("user").
+		Update(map[string]interface{}{
+			"name":     user.Name,
+			"email":    user.Email,
+			"password": user.Password,
+		}, "representation", "exact").Filter("id", "eq", id).Execute()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to update user: %v", err)})
 		return
 	}
-	c.JSON(http.StatusOK, user)
+
+	var updatedUser []User
+	if err := json.Unmarshal(response, &updatedUser); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to parse response: %v", err)})
+		return
+	}
+
+	if len(updatedUser) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "User updated successfully", "data": updatedUser[0]})
 }
 
 func DeleteUser(c *gin.Context) {
-	client := database.FirebaseDB
-	ref := client.NewRef("user")
+	// Inicializa o cliente Supabase
+	client, err := database.SupaBaseInit()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("cannot initialize client: %v", err)})
+		return
+	}
+
 	id := c.Param("id")
-	if err := ref.Child(id).Delete(c); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "User ID is required"})
+		return
+	}
+
+	_, _, err = client.From("user").Delete("representation", "exact").Eq("id", id).Execute()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to update user: %v", err)})
 		return
 	}
 	c.JSON(http.StatusNoContent, gin.H{})

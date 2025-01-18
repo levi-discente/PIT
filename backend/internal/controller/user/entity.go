@@ -23,3 +23,9 @@ type UserCreate struct {
 	Password string `json:"password"`
 	Role     Role   `json:"role"`
 }
+
+type UserUpdate struct {
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
