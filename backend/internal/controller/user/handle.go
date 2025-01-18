@@ -1,8 +1,9 @@
 package user
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
-	"strconv"
 
 	"github.com/levi-discente/PIT/internal/database"
 	"github.com/levi-discente/PIT/internal/helpers"
@@ -47,23 +48,40 @@ func GetUsers(c *gin.Context) {
 }
 
 func CreateUser(c *gin.Context) {
-	client := database.FirebaseDB
-	ref := client.NewRef("user")
-	var user User
+	client, err := database.SupaBaseInit()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("cannot initialize client: %v", err)})
+		return
+	}
+	var user UserCreate
 	if err := c.BindJSON(&user); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if user.ID == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "User ID is required"})
+
+	if user.Password == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "User password is required"})
 		return
 	}
-	userIDStr := strconv.Itoa(user.ID)
-	if err := ref.Child(userIDStr).Set(c, user); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+
+	response, _, err := client.From("user").Insert(user, false, "", "representation", "exact").Execute()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to insert user: %v", err)})
 		return
 	}
-	c.JSON(http.StatusCreated, user)
+
+	var createdUsers []User
+	if err := json.Unmarshal(response, &createdUsers); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to parse response: %v", err)})
+		return
+	}
+
+	if len(createdUsers) == 0 {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no user created"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"message": "User created successfully", "data": createdUsers[0]})
 }
 
 func UpdateUser(c *gin.Context) {
