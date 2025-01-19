@@ -1,102 +1,135 @@
 package pit
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
-	"reflect"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/levi-discente/PIT/internal/database"
-	"github.com/levi-discente/PIT/internal/helpers"
 )
 
 func GetPITs(c *gin.Context) {
-	client := database.FirebaseDB
-	ref := client.NewRef("pits")
-	var rawData interface{}
-
-	// Recupera os dados como interface genérica
-	if err := ref.Get(c, &rawData); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	client, err := database.SupaBaseInit()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("cannot initialize client: %v", err)})
 		return
 	}
 
-	var pits []PIT
-
-	// Verifica o tipo do dado retornado
-	if reflect.TypeOf(rawData).Kind() == reflect.Map {
-		// Caso seja um mapa, percorra e converta os itens
-		for _, v := range rawData.(map[string]interface{}) {
-			var pit PIT
-			if err := helpers.MapToStruct(v, &pit); err == nil {
-				pits = append(pits, pit)
-			}
-		}
-	} else if reflect.TypeOf(rawData).Kind() == reflect.Slice {
-		// Caso seja um array, percorra e converta os itens
-		for _, v := range rawData.([]interface{}) {
-			if v != nil {
-				var pit PIT
-				if err := helpers.MapToStruct(v, &pit); err == nil {
-					pits = append(pits, pit)
-				}
-			}
-		}
+	response, _, err := client.From("pit").Select("*", "exact", false).Execute()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to fetch pit %v", err)})
+		return
 	}
 
+	var pits []Pit
+	if err := json.Unmarshal(response, &pits); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to parse response: %v", err)})
+		return
+	}
 	c.JSON(http.StatusOK, pits)
 }
 
 func CreatePIT(c *gin.Context) {
-	client := database.FirebaseDB
-	ref := client.NewRef("pits")
-	var pit PIT
+	client, err := database.SupaBaseInit()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("cannot initialize client: %v", err)})
+		return
+	}
+	var pit PitCreate
 	if err := c.BindJSON(&pit); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if pit.ID == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "PIT ID is required"})
+
+	if pit.Semester == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Pit semester is required"})
+		return
+	}
+	if pit.UserID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Pit user id is required"})
+		return
+	}
+	response, _, err := client.From("pit").Insert(pit, false, "", "representation", "exact").Execute()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to insert user: %v", err)})
 		return
 	}
 
-	pitIDStr := strconv.Itoa(pit.ID)
-	if err := ref.Child(pitIDStr).Set(c, pit); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	var createdPit []Pit
+	if err := json.Unmarshal(response, &createdPit); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to parse response: %v", err)})
 		return
 	}
 
-	c.JSON(http.StatusCreated, pit)
+	if len(createdPit) == 0 {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no user created"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"message": "Pit created successfully", "data": createdPit[0]})
 }
 
 func UpdatePIT(c *gin.Context) {
-	client := database.FirebaseDB
-	ref := client.NewRef("pits")
+	client, err := database.SupaBaseInit()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("cannot initialize client: %v", err)})
+		return
+	}
+
 	id := c.Param("id")
-	var pit PIT
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Pit ID is required"})
+		return
+	}
+
+	var pit PitCreate
 	if err := c.BindJSON(&pit); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("failed to parse request body: %v", err)})
 		return
 	}
 
-	if err := ref.Child(id).Update(c, map[string]interface{}{
-		"semester": pit.Semester,
-		"year":     pit.Year,
-	}); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	response, _, err := client.From("pit").
+		Update(map[string]interface{}{
+			"semester":    pit.Semester,
+			"year":        pit.Year,
+			"description": pit.Description,
+		}, "representation", "exact").Filter("id", "eq", id).Execute()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to update pit: %v", err)})
 		return
 	}
 
-	c.JSON(http.StatusOK, pit)
+	var updatedPit []Pit
+	if err := json.Unmarshal(response, &updatedPit); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to parse response: %v", err)})
+		return
+	}
+
+	if len(updatedPit) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Pit not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Pit updated successfully", "data": updatedPit[0]})
 }
 
 func DeletePIT(c *gin.Context) {
-	client := database.FirebaseDB
-	ref := client.NewRef("pits")
-	id := c.Param("id")
+	client, err := database.SupaBaseInit()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("cannot initialize client: %v", err)})
+		return
+	}
 
-	if err := ref.Child(id).Delete(c); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Pit ID is required"})
+		return
+	}
+
+	_, _, err = client.From("pit").Delete("representation", "exact").Eq("id", id).Execute()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to delete pit: %v", err)})
 		return
 	}
 	c.JSON(http.StatusNoContent, gin.H{})
