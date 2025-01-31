@@ -1,101 +1,120 @@
 package activitytype
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
-	"reflect"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/levi-discente/PIT/internal/database"
-	"github.com/levi-discente/PIT/internal/helpers"
 )
 
 func GetActivityType(c *gin.Context) {
-	client := database.FirebaseDB
-	ref := client.NewRef("activities_types")
-	var rawData interface{}
-
-	// Recupera os dados como interface genérica
-	if err := ref.Get(c, &rawData); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	client, err := database.SupaBaseInit()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("cannot initialize client: %v", err)})
 		return
 	}
 
-	var activityTypes []ActivityType
-
-	// Verifica o tipo do dado retornado
-	if reflect.TypeOf(rawData).Kind() == reflect.Map {
-		// Caso seja um mapa, percorra e converta os itens
-		for _, v := range rawData.(map[string]interface{}) {
-			var activityType ActivityType
-			if err := helpers.MapToStruct(v, &activityType); err == nil {
-				activityTypes = append(activityTypes, activityType)
-			}
-		}
-	} else if reflect.TypeOf(rawData).Kind() == reflect.Slice {
-		// Caso seja um array, percorra e converta os itens
-		for _, v := range rawData.([]interface{}) {
-			if v != nil {
-				var activityType ActivityType
-				if err := helpers.MapToStruct(v, &activityType); err == nil {
-					activityTypes = append(activityTypes, activityType)
-				}
-			}
-		}
+	response, _, err := client.From("activity_type").Select("*", "exact", false).Execute()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to fetch activity_type %v", err)})
+		return
 	}
 
-	c.JSON(http.StatusOK, activityTypes)
+	var activity_type []ActivityType
+	if err := json.Unmarshal(response, &activity_type); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to parse response: %v", err)})
+		return
+	}
+	c.JSON(http.StatusOK, activity_type)
 }
 
 func CreateActivityType(c *gin.Context) {
-	client := database.FirebaseDB
-	ref := client.NewRef("activity_type")
-	var activityType ActivityType
-	if err := c.BindJSON(&activityType); err != nil {
+	client, err := database.SupaBaseInit()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("cannot initialize client: %v", err)})
+		return
+	}
+	var activity_type ActivityTypeCreate
+	if err := c.BindJSON(&activity_type); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if activityType.Id == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "activity ID is required"})
+
+	response, _, err := client.From("activity_type").Insert(activity_type, false, "", "representation", "exact").Execute()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to insert activity_type: %v", err)})
 		return
 	}
 
-	activityIDStr := strconv.Itoa(activityType.Id)
-	if err := ref.Child(activityIDStr).Set(c, activityType); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	var createdActivityType []ActivityType
+	if err := json.Unmarshal(response, &createdActivityType); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to parse response: %v", err)})
 		return
 	}
 
-	c.JSON(http.StatusCreated, activityType)
+	if len(createdActivityType) == 0 {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no activity_type created"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"message": "Pit created successfully", "data": createdActivityType[0]})
 }
 
 func UpdateActivityType(c *gin.Context) {
-	client := database.FirebaseDB
-	ref := client.NewRef("activities")
+	client, err := database.SupaBaseInit()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("cannot initialize client: %v", err)})
+		return
+	}
 	id := c.Param("id")
-	var activityType ActivityType
-	if err := c.BindJSON(&activityType); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var activity_type ActivityTypeUpdate
+	if err := c.BindJSON(&activity_type); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("failed to parse request body: %v", err)})
 		return
 	}
 
-	if err := ref.Child(id).Update(c, map[string]interface{}{
-		"Name": activityType.Name,
-	}); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	response, _, err := client.From("activity_type").
+		Update(map[string]interface{}{
+			"name":        activity_type.Name,
+			"description": activity_type.Description,
+		}, "representation", "exact").Filter("id", "eq", id).Execute()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to update activity: %v", err)})
 		return
 	}
 
-	c.JSON(http.StatusOK, activityType)
+	var updatedActivityType []ActivityType
+	if err := json.Unmarshal(response, &updatedActivityType); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to parse response: %v", err)})
+		return
+	}
+
+	if len(updatedActivityType) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Activity type not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Activity type updated successfully", "data": updatedActivityType[0]})
 }
 
 func DeleteActivityType(c *gin.Context) {
-	client := database.FirebaseDB
-	ref := client.NewRef("activities")
-	id := c.Param("id")
+	client, err := database.SupaBaseInit()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("cannot initialize client: %v", err)})
+		return
+	}
 
-	if err := ref.Child(id).Delete(c); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "activity_type ID is required"})
+		return
+	}
+
+	_, _, err = client.From("activity_type").Delete("representation", "exact").Eq("id", id).Execute()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to delete activity_type: %v", err)})
 		return
 	}
 	c.JSON(http.StatusNoContent, gin.H{})

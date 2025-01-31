@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/levi-discente/PIT/internal/database"
-
 	"github.com/gin-gonic/gin"
+	"github.com/levi-discente/PIT/internal/controller/auth"
+	"github.com/levi-discente/PIT/internal/database"
 )
 
 func GetUsers(c *gin.Context) {
@@ -38,23 +38,35 @@ func CreateUser(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("cannot initialize client: %v", err)})
 		return
 	}
+
 	var user UserCreate
 	if err := c.BindJSON(&user); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
+	// Verificar se a senha foi informada
 	if user.Password == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "User password is required"})
 		return
 	}
 
+	// Criptografar a senha antes de salvar no banco
+	hashedPassword, err := auth.HashPassword(user.Password)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+		return
+	}
+
+	// Criar um novo usuário com a senha criptografada
+	user.Password = hashedPassword
 	response, _, err := client.From("user").Insert(user, false, "", "representation", "exact").Execute()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to insert user: %v", err)})
 		return
 	}
 
+	// Converter a resposta JSON para struct User
 	var createdUsers []User
 	if err := json.Unmarshal(response, &createdUsers); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to parse response: %v", err)})

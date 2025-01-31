@@ -1,42 +1,41 @@
-package contorller
+package controller
 
 import (
-	"log"
-
 	"github.com/gin-gonic/gin"
 	"github.com/levi-discente/PIT/internal/controller/activities"
+	"github.com/levi-discente/PIT/internal/controller/auth"
 	"github.com/levi-discente/PIT/internal/controller/pit"
 	"github.com/levi-discente/PIT/internal/controller/user"
-	"github.com/levi-discente/PIT/internal/database"
 )
 
 func Controller() {
-	db, err := database.InitFirebase()
-	if err != nil {
-		log.Fatalf("Falha ao inicializar o Firebase: %v", err)
-	}
-
-	database.FirebaseDB = db
-
 	r := gin.Default()
 
-	// users
-	r.GET("/users", user.GetUsers)
+	// Rotas públicas
+	r.POST("/Auth/login", auth.Login)
 	r.POST("/users", user.CreateUser)
-	r.PUT("/users/:id", user.UpdateUser)
-	r.DELETE("/users/:id", user.DeleteUser)
+
+	// Grupo de rotas protegidas
+	protected := r.Group("/")
+	protected.Use(auth.AuthMiddleware())
+
+	// users
+	protected.GET("/users", user.GetUsers)
+	protected.PUT("/users/:id", user.UpdateUser)
+	protected.DELETE("/users/:id", user.DeleteUser)
 
 	// pits
-	r.GET("/pits", pit.GetPITs)
-	r.POST("/pits", pit.CreatePIT)
-	r.PUT("/pits/:id", pit.UpdatePIT)
-	r.DELETE("/pits/:id", pit.DeletePIT)
+	protected.GET("/pits", pit.GetPITs)
+	protected.POST("/pits", pit.CreatePIT)
+	protected.PUT("/pits/:id", pit.UpdatePIT)
+	protected.DELETE("/pits/:id", pit.DeletePIT)
+	protected.GET("/ws/pits", pit.PITWebSocket)
 
 	// activities
-	r.GET("/activities", activities.GetActivities)
-	r.POST("/activities", activities.CreateActivity)
-	r.PUT("/activities/:id", activities.UpdateActivity)
-	r.DELETE("/activities/:id", activities.DeleteActivity)
+	protected.GET("/activities", activities.GetActivities)
+	protected.POST("/activities", activities.CreateActivity)
+	protected.PUT("/activities/:id", activities.UpdateActivity)
+	protected.DELETE("/activities/:id", activities.DeleteActivity)
 
 	r.Run(":8080")
 }
