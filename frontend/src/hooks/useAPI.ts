@@ -1,49 +1,108 @@
 import { useCallback } from "react";
 
-const urlBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const urlBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 export default function useAPI() {
-  const httpGet = useCallback(async function <T>(caminho: string): Promise<T> {
-    if (!urlBase) {
-      throw new Error("A variável de ambiente NEXT_PUBLIC_API_URL não está definida.");
-    }
-    const uri = caminho.startsWith("/") ? caminho : `/${caminho}`;
-    const urlCompleta = `${urlBase}${uri}`;
+  const buildUrl = (path: string) =>
+    `${urlBase}${path.startsWith("/") ? path : "/" + path}`;
 
-    const resposta = await fetch(urlCompleta);
-    return extrairDados(resposta) as T;
+  const httpGet = useCallback(async <T>(path: string): Promise<T> => {
+    const res = await fetch(buildUrl(path));
+    const data = await res.json();
+    if (!res.ok) throw data;
+    return data as T;
   }, []);
 
-  const httpPost = useCallback(async function (caminho: string, body?: Record<string, unknown>) {
-    const uri = caminho.startsWith("/") ? caminho : `/${caminho}`;
-    const urlCompleta = `${urlBase}${uri}`;
+  const httpPost = useCallback(
+    async (path: string, body?: unknown) => {
+      const res = await fetch(buildUrl(path), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: body ? JSON.stringify(body) : null,
+      });
+      const data = await res.json();
+      if (!res.ok) throw data;
+      return data;
+    },
+    []
+  );
 
-    const resposta = await fetch(urlCompleta, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+  const httpPut = useCallback(async (path: string, body?: unknown) => {
+    const res = await fetch(buildUrl(path), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
       body: body ? JSON.stringify(body) : null,
     });
-    return extrairDados(resposta);
+    const data = await res.json();
+    if (!res.ok) throw data;
+    return data;
   }, []);
 
-  async function extrairDados(reposta: Response): Promise<unknown> {
-    let conteudo: Record<string, unknown>;
+  const httpDelete = useCallback(async (path: string) => {
+    const res = await fetch(buildUrl(path), { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) throw data;
+    return data;
+  }, []);
 
-    try {
-      conteudo = await reposta.json();
-    } catch {
-      if (!reposta.ok) {
-        throw new Error(
-          `Ocorreu um erro inesperado com status ${reposta.status}.`
-        );
-      }
-      return null;
-    }
-    if (!reposta.ok) throw conteudo;
-    return conteudo;
-  }
+  const createWebSocket = useCallback(
+    (
+      wsUrl: string,
+      {
+        onOpen,
+        onMessage,
+        onError,
+        onClose,
+      }: {
+        onOpen?: (event: Event) => void;
+        onMessage?: (data: unknown, event: MessageEvent) => void;
+        onError?: (error: Event) => void;
+        onClose?: (event: CloseEvent) => void;
+      } = {}
+    ) => {
+      const ws = new WebSocket(wsUrl);
 
-  return { httpGet, httpPost };
+      ws.onopen = (event) => {
+        if (onOpen) {
+          onOpen(event);
+        } else {
+          console.log("Conectado ao WebSocket");
+        }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const parsedData = JSON.parse(event.data);
+          if (onMessage) {
+            onMessage(parsedData, event);
+          } else {
+            console.log("Mensagem recebida:", parsedData);
+          }
+        } catch (error) {
+          console.error("Erro ao processar mensagem:", error);
+        }
+      };
+
+      ws.onerror = (event) => {
+        if (onError) {
+          onError(event);
+        } else {
+          console.error("Erro no WebSocket:", event);
+        }
+      };
+
+      ws.onclose = (event) => {
+        if (onClose) {
+          onClose(event);
+        } else {
+          console.log("WebSocket fechado");
+        }
+      };
+
+      return ws;
+    },
+    []
+  );
+
+  return { httpGet, httpPost, httpPut, httpDelete, createWebSocket };
 }

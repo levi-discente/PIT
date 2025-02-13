@@ -1,0 +1,23 @@
+FROM golang:1.23.5-alpine
+
+# Instala dependências necessárias (git, etc.)
+RUN apk add --no-cache git
+
+# Define o diretório de trabalho
+WORKDIR /app
+
+# Copia os arquivos de mod e baixa as dependências
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copia todo o código fonte
+COPY . .
+
+# Copia o arquivo .env para a imagem
+COPY .env /app/.env
+
+# Define a variável de ambiente para o arquivo de configuração
+ENV CONFIG_PATH=/app/.env
+
+# Comando para rodar a aplicação em modo desenvolvimento (compilação em tempo real)
+CMD ["go", "run", "cmd/main.go"]
