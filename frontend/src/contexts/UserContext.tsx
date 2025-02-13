@@ -3,25 +3,30 @@ import React, { createContext, useState, ReactNode, useContext } from "react";
 
 interface UserContextType {
   id: number | null;
-  role: "docente" | "discente" | null;
-  setUser: (id: number, role: "docente" | "discente") => void;
+  role: "free" | "premium" | null;
+  token: string | null
+  setUser: (id: number, role: "free" | "premium", userToken: string) => void;
   clearUser: () => void;
 }
 
 const UserContext = createContext<UserContextType>({
   id: null,
   role: null,
-  setUser: () => {},
-  clearUser: () => {},
+  setUser: () => { },
+  clearUser: () => { },
+  token: null
 });
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [id, setId] = useState<number | null>(null);
-  const [role, setRole] = useState<"docente" | "discente" | null>(null);
+  const [role, setRole] = useState<"free" | "premium" | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
-  const setUser = (userId: number, userRole: "docente" | "discente") => {
+  const setUser = (userId: number, userRole: "free" | "premium", userToken: string) => {
     setId(userId);
     setRole(userRole);
+    setToken(userToken)
+    console.log(userRole, userId)
   };
 
   const clearUser = () => {
@@ -30,7 +35,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <UserContext.Provider value={{ id, role, setUser, clearUser }}>
+    <UserContext.Provider value={{ id, role, setUser, clearUser, token }}>
       {children}
     </UserContext.Provider>
   );

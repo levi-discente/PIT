@@ -1,4 +1,4 @@
-export type Role = "docente" | "discente";
+export type Role = "free" | "premium";
 
 export interface User {
   id: number;

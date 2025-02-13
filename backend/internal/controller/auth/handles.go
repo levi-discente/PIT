@@ -74,5 +74,5 @@ func Login(c *gin.Context) {
 	}
 
 	// Retornar token JWT para o cliente
-	c.JSON(http.StatusOK, gin.H{"message": "Login successful", "token": token})
+	c.JSON(http.StatusOK, gin.H{"message": "Login successful", "id": dbUser.ID, "role": dbUser.Role, "token": token})
 }

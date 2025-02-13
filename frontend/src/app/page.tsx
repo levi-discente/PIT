@@ -18,16 +18,14 @@ const LoginPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Chama o endpoint de login com email e senha
       const data = await httpPost("/Auth/login", {
         email: formData.email,
         password: formData.senha,
       });
-      
-      // Supondo que a resposta contenha o id e o role do usuário logado
+
       const userId = (data as { id: number }).id;
-      const role = (data as { role: "docente" | "discente" }).role;
-      
+      const role = (data as { role: "free" | "premium" }).role;
+
       setUser(userId, role);
       router.push("/pits");
     } catch (error) {

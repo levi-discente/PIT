@@ -3,8 +3,8 @@ package user
 type Role string
 
 const (
-	Docente  Role = "docente"
-	Discente Role = "discente"
+	Free    Role = "free"
+	Premium Role = "premium"
 )
 
 type User struct {
