@@ -9,14 +9,14 @@ import (
 	"github.com/levi-discente/PIT/internal/controller/auth"
 	"github.com/levi-discente/PIT/internal/controller/pit"
 	"github.com/levi-discente/PIT/internal/controller/user"
+	"github.com/levi-discente/PIT/internal/controller/webhook"
 )
 
 func Controller() {
 	r := gin.Default()
 
-	// Configuração de CORS
 	config := cors.Config{
-		AllowOrigins:     []string{"*"}, // ou especifique os domínios permitidos
+		AllowOrigins:     []string{"*"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
@@ -28,6 +28,7 @@ func Controller() {
 	// Rotas públicas
 	r.POST("/Auth/login", auth.Login)
 	r.POST("/users", user.CreateUser)
+	r.POST("/webhook", webhook.Webhook)
 
 	// Grupo de rotas protegidas
 	protected := r.Group("/")
