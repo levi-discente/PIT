@@ -1,6 +1,9 @@
 package controller
 
 import (
+	"time"
+
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/levi-discente/PIT/internal/controller/activities"
 	"github.com/levi-discente/PIT/internal/controller/auth"
@@ -10,6 +13,17 @@ import (
 
 func Controller() {
 	r := gin.Default()
+
+	// Configuração de CORS
+	config := cors.Config{
+		AllowOrigins:     []string{"*"}, // ou especifique os domínios permitidos
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}
+	r.Use(cors.New(config))
 
 	// Rotas públicas
 	r.POST("/Auth/login", auth.Login)
