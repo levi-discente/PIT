@@ -25,8 +25,12 @@ const LoginPage = () => {
 
       const userId = (data as { id: number }).id;
       const role = (data as { role: "free" | "premium" }).role;
+      const token = (data as { token: string }).token;
 
-      setUser(userId, role);
+      // Armazena o token no localStorage
+      localStorage.setItem("token", token);
+
+      setUser(userId, role, token);
       router.push("/pits");
     } catch (error) {
       console.error("Erro no login:", error);

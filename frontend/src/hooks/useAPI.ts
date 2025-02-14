@@ -1,49 +1,75 @@
 import { useCallback } from "react";
+import { useUser } from "@/contexts/UserContext";
 
 const urlBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 export default function useAPI() {
+  const { token } = useUser();
+
+  // Recupera o token do contexto ou do localStorage, se disponível.
+  const getToken = () => {
+    return token || localStorage.getItem("token") || "";
+  };
+
   const buildUrl = (path: string) =>
     `${urlBase}${path.startsWith("/") ? path : "/" + path}`;
 
+  // Helper para construir os headers, incluindo o token se disponível.
+  const getHeaders = () => {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    const currentToken = getToken();
+    if (currentToken) {
+      headers["Authorization"] = `Bearer ${currentToken}`;
+    }
+    return headers;
+  };
+
   const httpGet = useCallback(async <T>(path: string): Promise<T> => {
-    const res = await fetch(buildUrl(path));
+    const res = await fetch(buildUrl(path), {
+      method: "GET",
+      headers: getHeaders(),
+    });
     const data = await res.json();
     if (!res.ok) throw data;
     return data as T;
-  }, []);
+  }, [token]);
 
   const httpPost = useCallback(
     async (path: string, body?: unknown) => {
       const res = await fetch(buildUrl(path), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getHeaders(),
         body: body ? JSON.stringify(body) : null,
       });
       const data = await res.json();
       if (!res.ok) throw data;
       return data;
     },
-    []
+    [token]
   );
 
   const httpPut = useCallback(async (path: string, body?: unknown) => {
     const res = await fetch(buildUrl(path), {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: getHeaders(),
       body: body ? JSON.stringify(body) : null,
     });
     const data = await res.json();
     if (!res.ok) throw data;
     return data;
-  }, []);
+  }, [token]);
 
   const httpDelete = useCallback(async (path: string) => {
-    const res = await fetch(buildUrl(path), { method: "DELETE" });
+    const res = await fetch(buildUrl(path), {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
     const data = await res.json();
     if (!res.ok) throw data;
     return data;
-  }, []);
+  }, [token]);
 
   const createWebSocket = useCallback(
     (
@@ -60,7 +86,12 @@ export default function useAPI() {
         onClose?: (event: CloseEvent) => void;
       } = {}
     ) => {
-      const ws = new WebSocket(wsUrl);
+      // Se o token estiver disponível, adiciona-o como parâmetro de query na URL do WebSocket.
+      const currentToken = getToken();
+      const finalWsUrl = currentToken
+        ? `${wsUrl}?token=${encodeURIComponent(currentToken)}`
+        : wsUrl;
+      const ws = new WebSocket(finalWsUrl);
 
       ws.onopen = (event) => {
         if (onOpen) {
@@ -101,7 +132,7 @@ export default function useAPI() {
 
       return ws;
     },
-    []
+    [token]
   );
 
   return { httpGet, httpPost, httpPut, httpDelete, createWebSocket };

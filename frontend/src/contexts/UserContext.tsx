@@ -26,12 +26,13 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     setId(userId);
     setRole(userRole);
     setToken(userToken)
-    console.log(userRole, userId)
+    console.log(userRole, userId, userToken)
   };
 
   const clearUser = () => {
     setId(null);
     setRole(null);
+    setToken(null);
   };
 
   return (
