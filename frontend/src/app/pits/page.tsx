@@ -53,7 +53,7 @@ export default function PitsPage() {
     return () => {
       ws.close();
     };
-  }, [createWebSocket]);
+  }, []);
 
   return (
     <div className="min-h-screen p-8">

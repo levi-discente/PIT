@@ -44,7 +44,7 @@ func Controller() {
 	protected.POST("/pits", pit.CreatePIT)
 	protected.PUT("/pits/:id", pit.UpdatePIT)
 	protected.DELETE("/pits/:id", pit.DeletePIT)
-	protected.GET("/ws/pits", pit.PITWebSocket)
+	r.GET("/ws/pits", pit.PITWebSocket)
 
 	// activities
 	protected.GET("/activities", activities.GetActivities)
