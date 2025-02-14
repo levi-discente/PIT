@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/levi-discente/PIT/internal/database"
 )
 
 func AuthMiddleware() gin.HandlerFunc {
@@ -24,24 +23,14 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Inicializar Supabase
-		client, err := database.SupaBaseInit()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao conectar ao Supabase"})
-			c.Abort()
-			return
-		}
-
-		// Buscar usuário autenticado
-		user, err := client.Auth.GetUser()
+		claims, err := ValidateToken(tokenParts[1])
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token inválido ou expirado"})
 			c.Abort()
 			return
 		}
 
-		// Armazenar usuário na requisição
-		c.Set("user", user)
+		c.Set("user", claims)
 		c.Next()
 	}
 }
